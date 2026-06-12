@@ -48,8 +48,6 @@ AAnCharacter::AAnCharacter()
 
 	WeaponMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("Weapon"));
 	WeaponMesh->SetupAttachment(GetMesh());
-
-	LanternMID->SetScalarParameterValue(EmissiveParamName, 0.f);
 	
 	InventoryComponent = CreateDefaultSubobject<UInventoryComponent>(TEXT("InventoryComponent"));
 }
