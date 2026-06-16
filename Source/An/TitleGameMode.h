@@ -12,6 +12,8 @@ class ATitleGameMode : public AGameModeBase
 public:
 	ATitleGameMode();
 
+	virtual void Tick(float DeltaSeconds) override;
+
 	UFUNCTION(BlueprintCallable, Category = "Title")
 	void StartGame();
 
@@ -23,10 +25,11 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Title|UI")
 	TSubclassOf<class UUserWidget> LoadingWidgetClass;
-	
-	UPROPERTY(EditDefaultsOnly, Category = "Title")
-	FName GameLevelName = TEXT("GameLevel");
 
+
+	UPROPERTY(EditDefaultsOnly, Category = "Title")
+	TSoftObjectPtr<UWorld> GameLevel;
+	
 	UPROPERTY(EditDefaultsOnly, Category = "Title")
 	float LoadingMinTime = 1.5f;
 
@@ -35,7 +38,17 @@ private:
 	class UUserWidget* TitleWidget;
 
 	UPROPERTY()
-	class UUserWidget* LoadingWidget;
+	class ULoadingWidget* LoadingWidget;
 
-	void OpenGameLevel();
+	UPROPERTY()
+	class ULevelStreamingDynamic* StreamingLevel;
+
+	bool bIsLoading      = false;
+	bool bLevelLoaded    = false;
+	bool bMinTimeElapsed = false;
+
+	FTimerHandle MinTimeHandle;
+
+	void OnMinTimeElapsed();
+	void TryOpenGameLevel();
 };
