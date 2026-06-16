@@ -38,8 +38,14 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Firefly")
 	FName LanternSocketName = TEXT("lantern_socket");
 
+	UFUNCTION()
+	void OnLanternReady();
+
+
 private:
 	bool bFlying = false;
+
+	bool bWaitingForEquip = false;
 	
 	UPROPERTY()
 	class AAnCharacter* TargetPlayer;

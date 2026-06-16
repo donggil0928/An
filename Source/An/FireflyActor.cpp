@@ -28,10 +28,28 @@ void AFireflyActor::Interact_Implementation(AActor* Interactor)
 	if (!Player) return;
 
 	TargetPlayer = Player;
-	bFlying      = true;
-	
 	MeshComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	
+	if (Player->IsLanternEquipped())
+	{
+		bFlying = true;
+		SetActorTickEnabled(true);
+		return;
+	}
+	
+	bWaitingForEquip = true;
+	Player->OnLanternEquippedComplete.AddUObject(this, &AFireflyActor::OnLanternReady);
+	Player->PlayEquipMontage();
+}
+
+void AFireflyActor::OnLanternReady()
+{
+	if (!bWaitingForEquip || !TargetPlayer) return;
+
+	bWaitingForEquip = false;
+	TargetPlayer->OnLanternEquippedComplete.RemoveAll(this);
+
+	bFlying = true;
 	SetActorTickEnabled(true);
 }
 
@@ -40,6 +58,8 @@ void AFireflyActor::Tick(float DeltaSeconds)
 	Super::Tick(DeltaSeconds);
 
 	if (!bFlying || !TargetPlayer) return;
+
+	//if (!TargetPlayer->IsLanternEquipped()) return;
 	
 	const FVector TargetLocation = TargetPlayer->GetLanternLocation(LanternSocketName);
 	const FVector CurrentLocation = GetActorLocation();

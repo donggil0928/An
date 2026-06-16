@@ -1,5 +1,3 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -69,6 +67,12 @@ class AAnCharacter : public ACharacter
 
 	UPROPERTY(EditAnywhere, Category = "Lantern", meta = (AllowPrivateAccess = "true"))
 	FName EmissiveParamName = TEXT("EmissiveIntensity");
+	
+	UPROPERTY(EditAnywhere, Category = "Lantern|Socket", meta = (AllowPrivateAccess = "true"))
+	FName LanternEquipSocket = TEXT("hand_r_socket");
+	
+	UPROPERTY(EditAnywhere, Category = "Lantern|Socket", meta = (AllowPrivateAccess = "true"))
+	FName LanternDefaultSocket = TEXT("back_socket");
 
 	UPROPERTY()
 	class UMaterialInstanceDynamic* LanternMID;
@@ -78,30 +82,20 @@ class AAnCharacter : public ACharacter
 
 	bool bIsInDialogue = false;
 
-	// ────────────────────────────────────────────────
-	// 랜턴 상태
-	// State1 = 랜턴 장착(bIsState2 = false)
-	// State2 = 랜턴 비장착(bIsState2 = true)
-	// ────────────────────────────────────────────────
-
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = "Lantern|State", meta = (AllowPrivateAccess = "true"))
 	bool bIsState2 = true;
 
 	UPROPERTY(EditAnywhere, Category = "Lantern|State", meta = (AllowPrivateAccess = "true"))
 	float InactiveTimeout = 5.f;
-
-	// [추가] 장착/해제 몽타주 애셋 — BP에서 AM_LanternEquip / AM_LanternUnequip 할당
+	
 	UPROPERTY(EditAnywhere, Category = "Lantern|Montage", meta = (AllowPrivateAccess = "true"))
 	class UAnimMontage* EquipMontage;
 
 	UPROPERTY(EditAnywhere, Category = "Lantern|Montage", meta = (AllowPrivateAccess = "true"))
 	class UAnimMontage* UnequipMontage;
-
-	// [추가] 몽타주 재생 중 상태 전환 차단 플래그
+	
 	bool bIsPlayingMontage = false;
-
-	// [추가] 랜턴 장착 완료 여부 (몽타주 종료 후 State1 진입 시 true)
-	// bIsState2와 별개로, 몽타주 재생 중에도 "장착 의도" 여부를 추적
+	
 	bool bIsLanternEquipped = false;
 
 	FTimerHandle LanternUnequipTimerHandle;
@@ -112,32 +106,29 @@ class AAnCharacter : public ACharacter
 	void OnIdleTimeout();
 
 	void SetABPIsState2(bool bValue);
-
-	// [추가] 몽타주 재생 및 종료 콜백
-	void PlayEquipMontage();
+	
 	void PlayUnequipMontage();
+	
+	void AttachWeaponToSocket(FName SocketName);
 
 	UFUNCTION()
 	void OnEquipMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 
 	UFUNCTION()
 	void OnUnequipMontageEnded(UAnimMontage* Montage, bool bInterrupted);
-
-	UFUNCTION()
-	void OnAnimInitialized();
-
-	// [추가] 몽타주 AnimNotify 콜백
-	// AM_LanternEquip 타임라인에 "NotifyEquipReady" 추가 후 연결
+	
 	UFUNCTION(BlueprintCallable, Category = "Lantern|Montage")
 	void AnimNotify_EquipReady();
 
-	// AM_LanternUnequip 타임라인에 "NotifyUnequipReady" 추가 후 연결
 	UFUNCTION(BlueprintCallable, Category = "Lantern|Montage")
 	void AnimNotify_UnequipReady();
 
 public:
 	AAnCharacter();
 
+	DECLARE_MULTICAST_DELEGATE(FOnLanternEquipped);
+	FOnLanternEquipped OnLanternEquippedComplete;
+	
 	void EnterDialogue(ANpcActor* Npc);
 	void ExitDialogue();
 
@@ -147,6 +138,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Lantern")
 	void AddLanternEnergy(float Amount);
 
+	UFUNCTION(BlueprintCallable, Category = "Lantern|State")
+	bool IsLanternEquipped() const { return bIsLanternEquipped; }
+
+	void PlayEquipMontage();
+	
 	UFUNCTION(BlueprintCallable, Category = "Lantern")
 	float GetLanternEnergy() const { return LanternEnergy; }
 
@@ -170,6 +166,6 @@ protected:
 
 public:
 	FORCEINLINE class USpringArmComponent* GetCameraBoom()  const { return CameraBoom; }
-	FORCEINLINE class UCameraComponent*   GetFollowCamera() const { return FollowCamera; }
-	FORCEINLINE UInventoryComponent*      GetInventory()    const { return InventoryComponent; }
+	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
+	FORCEINLINE UInventoryComponent* GetInventory()    const { return InventoryComponent; }
 };
