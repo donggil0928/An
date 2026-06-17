@@ -16,7 +16,7 @@ ANpcActor::ANpcActor()
 {
     PrimaryActorTick.bCanEverTick = false;
 
-    MeshComp = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MeshComp"));
+    MeshComp = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("MeshComp"));
     RootComponent = MeshComp;
 
     MeshComp->SetCollisionEnabled(ECollisionEnabled::QueryOnly);

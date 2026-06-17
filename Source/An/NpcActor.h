@@ -40,7 +40,7 @@ public:
 
 protected:
 	UPROPERTY(VisibleAnywhere, Category = "NPC")
-	class UStaticMeshComponent* MeshComp;
+	class USkeletalMeshComponent* MeshComp;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC")
 	FText NpcName;

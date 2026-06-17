@@ -327,6 +327,34 @@ void AAnCharacter::OnUnequipMontageEnded(UAnimMontage* Montage, bool bInterrupte
 		&AAnCharacter::OnIdleTimeout, InactiveTimeout, false);
 }
 
+void AAnCharacter::PlayCollectMontage()
+{
+	UAnimInstance* AnimInst = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInst || !CollectMontage)
+	{
+		bIsCollecting = false;
+		return;
+	}
+
+	bIsCollecting = true;
+
+	AnimInst->OnMontageEnded.RemoveDynamic(this, &AAnCharacter::OnCollectMontageEnded);
+	AnimInst->OnMontageEnded.AddDynamic(this, &AAnCharacter::OnCollectMontageEnded);
+
+	PlayAnimMontage(CollectMontage);
+}
+
+void AAnCharacter::OnCollectMontageEnded(UAnimMontage* Montage, bool bInterrupted)
+{
+	if (Montage != CollectMontage) return;
+
+	bIsCollecting = false;
+
+	UAnimInstance* AnimInst = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (AnimInst)
+		AnimInst->OnMontageEnded.RemoveDynamic(this, &AAnCharacter::OnCollectMontageEnded);
+}
+
 void AAnCharacter::OnJumpOrAdvance(const FInputActionValue& Value)
 {
 	if (bIsInDialogue)
@@ -354,6 +382,7 @@ void AAnCharacter::EndDialogueInput(const FInputActionValue& Value)
 void AAnCharacter::Move(const FInputActionValue& Value)
 {
 	if (bIsInDialogue) return;
+	if (bIsCollecting) return;
 
 	FVector2D MovementVector = Value.Get<FVector2D>();
 	if (Controller != nullptr)

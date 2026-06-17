@@ -32,6 +32,7 @@ void AFireflyActor::Interact_Implementation(AActor* Interactor)
 	
 	if (Player->IsLanternEquipped())
 	{
+		Player->PlayCollectMontage();
 		bFlying = true;
 		SetActorTickEnabled(true);
 		return;
@@ -49,6 +50,7 @@ void AFireflyActor::OnLanternReady()
 	bWaitingForEquip = false;
 	TargetPlayer->OnLanternEquippedComplete.RemoveAll(this);
 
+	TargetPlayer->PlayCollectMontage();
 	bFlying = true;
 	SetActorTickEnabled(true);
 }

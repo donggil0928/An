@@ -93,8 +93,15 @@ class AAnCharacter : public ACharacter
 
 	UPROPERTY(EditAnywhere, Category = "Lantern|Montage", meta = (AllowPrivateAccess = "true"))
 	class UAnimMontage* UnequipMontage;
+
+	// 반딧불이 수집 애니메이션
+	UPROPERTY(EditAnywhere, Category = "Lantern|Montage", meta = (AllowPrivateAccess = "true"))
+	class UAnimMontage* CollectMontage;
 	
 	bool bIsPlayingMontage = false;
+
+	// 수집 애니메이션 재생 중 여부 (이동 차단용)
+	bool bIsCollecting = false;
 	
 	bool bIsLanternEquipped = false;
 
@@ -116,6 +123,9 @@ class AAnCharacter : public ACharacter
 
 	UFUNCTION()
 	void OnUnequipMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+
+	UFUNCTION()
+	void OnCollectMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 	
 	UFUNCTION(BlueprintCallable, Category = "Lantern|Montage")
 	void AnimNotify_EquipReady();
@@ -142,6 +152,11 @@ public:
 	bool IsLanternEquipped() const { return bIsLanternEquipped; }
 
 	void PlayEquipMontage();
+
+	void PlayCollectMontage();
+
+	UFUNCTION(BlueprintCallable, Category = "Lantern")
+	bool IsCollecting() const { return bIsCollecting; }
 	
 	UFUNCTION(BlueprintCallable, Category = "Lantern")
 	float GetLanternEnergy() const { return LanternEnergy; }
