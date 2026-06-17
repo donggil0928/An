@@ -31,7 +31,7 @@ protected:
 	TSoftObjectPtr<UWorld> GameLevel;
 	
 	UPROPERTY(EditDefaultsOnly, Category = "Title")
-	float LoadingMinTime = 1.5f;
+	float LoadingMinTime = 5.5f;
 
 private:
 	UPROPERTY()

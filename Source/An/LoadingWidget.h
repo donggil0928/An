@@ -15,10 +15,18 @@ public:
 
 protected:
 	virtual void NativeConstruct() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 	
 	UPROPERTY(Transient, meta = (BindWidgetAnimOptional))
 	class UWidgetAnimation* PlayAnim;
 	
 	UPROPERTY(meta = (BindWidgetOptional))
-	class UProgressBar* ProgressBar_Loading;
+	class UImage* Image_Lamp;
+
+	UPROPERTY()
+	class UMaterialInstanceDynamic* LampMaterialInstance;
+
+private:
+	float TargetProgress = 0.f;
+	float CurrentProgress = 0.f;
 };
