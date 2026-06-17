@@ -9,7 +9,8 @@ enum class EInteractableType : uint8
 {
 	Firefly		UMETA(DisplayName = "Firefly"),
 	NPC			UMETA(DisplayName = "NPC"),
-	Item		UMETA(DisplayName = "Item")
+	Item		UMETA(DisplayName = "Item"),
+	Portal		UMETA(DisplayName = "Portal")
 };
 
 UINTERFACE(MinimalAPI, BlueprintType)
