@@ -25,7 +25,16 @@ protected:
 	
 	UPROPERTY(EditAnywhere, Category = "Portal|Cinematic")
 	class ULevelSequence* OpenSequence;
-
+	
+	UPROPERTY(EditAnywhere, Category = "Portal|Cinematic")
+	class UAnimMontage* OpenMontage;
+	
+	UPROPERTY(EditAnywhere, Category = "Portal|End")
+	TSubclassOf<class UUserWidget> EndWidgetClass;
+	
+	UPROPERTY(EditAnywhere, Category = "Portal|End")
+	float EndWidgetDelay = 5.f;
+	
 	UPROPERTY(BlueprintReadOnly, Category = "Portal")
 	bool bIsActivated = false;
 	
@@ -34,6 +43,8 @@ protected:
 	
 	UFUNCTION(BlueprintImplementableEvent, Category = "Portal")
 	void OnPortalLocked(float CurrentEnergy, float Required);
+	
+	
 	
 	UFUNCTION()
 	void OnSequenceFinished();
@@ -45,5 +56,10 @@ private:
 	UPROPERTY()
 	AActor* CurrentInteractor;
 
+	FTimerHandle EndWidgetTimerHandle;	
+
 	void PlayOpenCinematic();
+	void PlayOpenMontage();
+	void StartEndWidgetTimer();
+	void ShowEndWidget();
 };

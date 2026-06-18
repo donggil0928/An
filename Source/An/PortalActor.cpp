@@ -5,6 +5,9 @@
 #include "LevelSequencePlayer.h"
 #include "LevelSequenceActor.h"
 #include "GameFramework/PlayerController.h"
+#include "Animation/AnimInstance.h"	
+#include "Blueprint/UserWidget.h"
+#include "TimerManager.h"
 #include "Kismet/GameplayStatics.h"
 
 APortalActor::APortalActor()
@@ -42,8 +45,12 @@ void APortalActor::Interact_Implementation(AActor* Interactor)
 	UE_LOG(LogTemp, Log, TEXT("[포탈] 활성화 — 포탈이 열립니다."));
 	
 	OnPortalOpen();
+
+	PlayOpenMontage();
 	
 	PlayOpenCinematic();
+	
+	StartEndWidgetTimer();
 }
 
 void APortalActor::PlayOpenCinematic()
@@ -78,16 +85,66 @@ void APortalActor::PlayOpenCinematic()
 	}
 }
 
-void APortalActor::OnSequenceFinished()
+void APortalActor::PlayOpenMontage()
 {
-	if (AAnCharacter* Player = Cast<AAnCharacter>(CurrentInteractor))
+	if (!OpenMontage)
 	{
-		if (APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0))
-		{
-			Player->EnableInput(PC);
-		}
+		UE_LOG(LogTemp, Warning, TEXT("[포탈] OpenMontage 미설정 — 몽타주 생략"));
+		return;
 	}
 
+	UAnimInstance* AnimInst = MeshComp ? MeshComp->GetAnimInstance() : nullptr;
+	if (!AnimInst)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[포탈] AnimInstance 없음 — 메시에 Anim Class 미지정"));
+		return;
+	}
+
+	AnimInst->Montage_Play(OpenMontage);
+}
+
+void APortalActor::StartEndWidgetTimer()
+{
+	float TotalDelay = EndWidgetDelay;
+
+	if (OpenSequence && SequencePlayer)
+	{
+		TotalDelay += SequencePlayer->GetDuration().AsSeconds();
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[포탈] %.1f초 후 END 위젯 표시"), TotalDelay);
+
+	GetWorldTimerManager().SetTimer(
+		EndWidgetTimerHandle,
+		this,
+		&APortalActor::ShowEndWidget,
+		TotalDelay,
+		false
+	);
+}
+
+void APortalActor::ShowEndWidget()
+{
+	APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+	if (!PC) return;
+
+	if (!EndWidgetClass)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[포탈] EndWidgetClass 미설정"));
+		return;
+	}
+
+	if (UUserWidget* EndWidget = CreateWidget<UUserWidget>(PC, EndWidgetClass))
+	{
+		EndWidget->AddToViewport(100);
+	}
+	
+	PC->bShowMouseCursor = true;
+	PC->SetInputMode(FInputModeUIOnly());
+}
+
+void APortalActor::OnSequenceFinished()
+{
 	UE_LOG(LogTemp, Log, TEXT("[포탈] 시네마틱 종료"));
 }
 

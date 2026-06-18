@@ -47,6 +47,9 @@ class AAnCharacter : public ACharacter
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* DialogueSkipAction;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* PauseAction;
+	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory", meta = (AllowPrivateAccess = "true"))
 	UInventoryComponent* InventoryComponent;
 
@@ -105,6 +108,8 @@ class AAnCharacter : public ACharacter
 	
 	bool bIsLanternEquipped = false;
 
+	bool bIsPaused = false;
+	
 	FTimerHandle LanternUnequipTimerHandle;
 	FTimerHandle IdleTimerHandle;
 
@@ -133,6 +138,14 @@ class AAnCharacter : public ACharacter
 	UFUNCTION(BlueprintCallable, Category = "Lantern|Montage")
 	void AnimNotify_UnequipReady();
 
+	void OnPauseInput(const FInputActionValue& Value);
+	
+	UPROPERTY(EditAnywhere, Category = "Pause|UI", meta = (AllowPrivateAccess = "true"))
+	TSubclassOf<class UUserWidget> PauseWidgetClass;
+
+	UPROPERTY()
+	class UUserWidget* PauseWidget;
+	
 public:
 	AAnCharacter();
 
@@ -142,6 +155,9 @@ public:
 	void EnterDialogue(ANpcActor* Npc);
 	void ExitDialogue();
 
+	UFUNCTION(BlueprintCallable, Category = "Pause")
+	void TogglePause();
+	
 	UFUNCTION(BlueprintCallable, Category = "Lantern")
 	FVector GetLanternLocation(FName SocketName = TEXT("lantern_socket")) const;
 

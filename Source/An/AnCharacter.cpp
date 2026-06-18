@@ -13,9 +13,12 @@
 #include "InteractableInterface.h"
 #include "InventoryComponent.h"
 #include "NpcActor.h"
+#include "PauseWidget.h"                          // ★ 추가
+#include "Blueprint/UserWidget.h"                 // ★ 추가
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Animation/AnimInstance.h"
-#include "Animation/AnimMontage.h" 
+#include "Animation/AnimMontage.h"
+#include "Kismet/GameplayStatics.h"               // ★ 추가
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
@@ -59,7 +62,7 @@ void AAnCharacter::AttachWeaponToSocket(FName SocketName)
 		EAttachmentRule::SnapToTarget,
 		EAttachmentRule::SnapToTarget,
 		EAttachmentRule::KeepRelative,
-		true 
+		true
 	);
 	WeaponMesh->AttachToComponent(GetMesh(), Rules, SocketName);
 }
@@ -104,8 +107,8 @@ void AAnCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 
 	if (UEnhancedInputComponent* EIC = Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
-		EIC->BindAction(JumpAction, ETriggerEvent::Started,   this, &AAnCharacter::OnJumpOrAdvance);
-		EIC->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
+		EIC->BindAction(JumpAction,   ETriggerEvent::Started,   this, &AAnCharacter::OnJumpOrAdvance);
+		EIC->BindAction(JumpAction,   ETriggerEvent::Completed, this, &ACharacter::StopJumping);
 		EIC->BindAction(MoveAction,   ETriggerEvent::Triggered, this, &AAnCharacter::Move);
 		EIC->BindAction(LookAction,   ETriggerEvent::Triggered, this, &AAnCharacter::Look);
 		EIC->BindAction(InteractAction, ETriggerEvent::Started, this, &AAnCharacter::Interact);
@@ -115,8 +118,75 @@ void AAnCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 
 		if (DialogueSkipAction)
 			EIC->BindAction(DialogueSkipAction, ETriggerEvent::Started, this, &AAnCharacter::EndDialogueInput);
+
+		// ★ 추가: ESC 입력 바인딩
+		if (PauseAction)
+			EIC->BindAction(PauseAction, ETriggerEvent::Started, this, &AAnCharacter::OnPauseInput);
 	}
 }
+
+// ★ 추가 ─────────────────────────────────────────────
+// ESC 키 입력 → TogglePause 호출
+void AAnCharacter::OnPauseInput(const FInputActionValue& Value)
+{
+	// 대화 중에는 일시정지 메뉴를 열지 않음
+	if (bIsInDialogue) return;
+
+	TogglePause();
+}
+
+// ★ 추가 ─────────────────────────────────────────────
+// 일시정지 토글: 위젯 생성/제거 + 게임 일시정지/재개
+void AAnCharacter::TogglePause()
+{
+	APlayerController* PC = Cast<APlayerController>(GetController());
+	if (!PC) return;
+
+	bIsPaused = !bIsPaused;
+
+	if (bIsPaused)
+	{
+		// 게임 일시정지
+		UGameplayStatics::SetGamePaused(GetWorld(), true);
+
+		// 마우스 표시 + UI 입력 모드
+		PC->bShowMouseCursor = true;
+		PC->SetInputMode(FInputModeGameAndUI());
+
+		// 일시정지 위젯 생성 및 표시
+		if (PauseWidgetClass && !PauseWidget)
+		{
+			PauseWidget = CreateWidget<UUserWidget>(PC, PauseWidgetClass);
+			if (PauseWidget)
+			{
+				// OwnerCharacter 주입
+				if (FObjectProperty* Prop = FindFProperty<FObjectProperty>(
+					PauseWidget->GetClass(), TEXT("OwnerCharacter")))
+				{
+					Prop->SetObjectPropertyValue_InContainer(PauseWidget, this);
+				}
+				PauseWidget->AddToViewport(20); // HUD 위에 표시
+			}
+		}
+		else if (PauseWidget)
+		{
+			PauseWidget->SetVisibility(ESlateVisibility::Visible);
+		}
+	}
+	else
+	{
+		// 게임 재개
+		UGameplayStatics::SetGamePaused(GetWorld(), false);
+
+		PC->bShowMouseCursor = false;
+		PC->SetInputMode(FInputModeGameOnly());
+
+		// 일시정지 위젯 숨기기 (재사용을 위해 Destroy 대신 Hidden)
+		if (PauseWidget)
+			PauseWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+// ─────────────────────────────────────────────────────
 
 void AAnCharacter::EnterDialogue(ANpcActor* Npc)
 {
@@ -153,66 +223,46 @@ void AAnCharacter::AddLanternEnergy(float Amount)
 		const float EmissiveValue = FMath::Clamp(LanternEnergy, 0.f, MaxEmissiveValue);
 		LanternMID->SetScalarParameterValue(EmissiveParamName, EmissiveValue);
 	}
-	
+
 	if (!bIsLanternEquipped && !bIsPlayingMontage)
-	{
 		PlayEquipMontage();
-	}
 	else
-	{
 		ResetActivityTimers();
-	}
 }
 
 void AAnCharacter::SetABPIsState2(bool bValue)
 {
 	UAnimInstance* AnimInst = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
 	if (!AnimInst) return;
-	
+
 	FBoolProperty* Prop = FindFProperty<FBoolProperty>(AnimInst->GetClass(), TEXT("bIsState2"));
 	if (Prop)
-	{
 		Prop->SetPropertyValue_InContainer(AnimInst, bValue);
-	}
 }
 
 void AAnCharacter::ResetActivityTimers()
 {
 	GetWorldTimerManager().ClearTimer(LanternUnequipTimerHandle);
 	GetWorldTimerManager().ClearTimer(IdleTimerHandle);
-	
+
 	if (bIsPlayingMontage) return;
 
 	if (!bIsState2)
 	{
 		GetWorldTimerManager().SetTimer(
-			LanternUnequipTimerHandle,
-			this,
-			&AAnCharacter::OnLanternUnequipTimeout,
-			InactiveTimeout,
-			false
-		);
+			LanternUnequipTimerHandle, this,
+			&AAnCharacter::OnLanternUnequipTimeout, InactiveTimeout, false);
 	}
 	else
 	{
 		GetWorldTimerManager().SetTimer(
-			IdleTimerHandle,
-			this,
-			&AAnCharacter::OnIdleTimeout,
-			InactiveTimeout,
-			false
-		);
+			IdleTimerHandle, this,
+			&AAnCharacter::OnIdleTimeout, InactiveTimeout, false);
 	}
 }
 
-void AAnCharacter::OnLanternUnequipTimeout()
-{
-	PlayUnequipMontage();
-}
-
-void AAnCharacter::OnIdleTimeout()
-{
-}
+void AAnCharacter::OnLanternUnequipTimeout() { PlayUnequipMontage(); }
+void AAnCharacter::OnIdleTimeout()           {}
 
 void AAnCharacter::PlayEquipMontage()
 {
@@ -227,12 +277,12 @@ void AAnCharacter::PlayEquipMontage()
 
 	bIsState2 = false;
 	SetABPIsState2(false);
-	
+
 	if (bIsPlayingMontage)
 		StopAnimMontage(UnequipMontage);
 
 	bIsPlayingMontage = true;
-	
+
 	AnimInst->OnMontageEnded.RemoveDynamic(this, &AAnCharacter::OnEquipMontageEnded);
 	AnimInst->OnMontageEnded.RemoveDynamic(this, &AAnCharacter::OnUnequipMontageEnded);
 	AnimInst->OnMontageEnded.AddDynamic(this, &AAnCharacter::OnEquipMontageEnded);
@@ -254,12 +304,12 @@ void AAnCharacter::PlayUnequipMontage()
 
 	bIsState2 = true;
 	SetABPIsState2(true);
-	
+
 	if (bIsPlayingMontage)
 		StopAnimMontage(EquipMontage);
 
 	bIsPlayingMontage = true;
-	
+
 	AnimInst->OnMontageEnded.RemoveDynamic(this, &AAnCharacter::OnEquipMontageEnded);
 	AnimInst->OnMontageEnded.RemoveDynamic(this, &AAnCharacter::OnUnequipMontageEnded);
 	AnimInst->OnMontageEnded.AddDynamic(this, &AAnCharacter::OnUnequipMontageEnded);
@@ -313,11 +363,8 @@ void AAnCharacter::OnUnequipMontageEnded(UAnimMontage* Montage, bool bInterrupte
 	if (AnimInst)
 		AnimInst->OnMontageEnded.RemoveDynamic(this, &AAnCharacter::OnUnequipMontageEnded);
 
-	if (bInterrupted)
-	{
-		return;
-	}
-	
+	if (bInterrupted) return;
+
 	bIsState2 = true;
 	SetABPIsState2(true);
 	bIsLanternEquipped = false;
@@ -382,7 +429,7 @@ void AAnCharacter::EndDialogueInput(const FInputActionValue& Value)
 void AAnCharacter::Move(const FInputActionValue& Value)
 {
 	if (bIsInDialogue) return;
-	if (bIsCollecting) return;
+	if (bIsCollecting)  return;
 
 	FVector2D MovementVector = Value.Get<FVector2D>();
 	if (Controller != nullptr)
@@ -394,7 +441,7 @@ void AAnCharacter::Move(const FInputActionValue& Value)
 		AddMovementInput(ForwardDir, MovementVector.Y);
 		AddMovementInput(RightDir,   MovementVector.X);
 	}
-	
+
 	if (!bIsState2)
 		ResetActivityTimers();
 }
