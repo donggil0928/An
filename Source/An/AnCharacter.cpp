@@ -11,19 +11,25 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "InteractableInterface.h"
+#include "InteractHintWidget.h"
 #include "InventoryComponent.h"
+#include "QuestComponent.h"
 #include "NpcActor.h"
-#include "PauseWidget.h"                          // ★ 추가
-#include "Blueprint/UserWidget.h"                 // ★ 추가
+#include "PauseWidget.h"
+#include "Blueprint/UserWidget.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
-#include "Kismet/GameplayStatics.h"               // ★ 추가
+#include "InteractHintWidget.h"
+#include "Kismet/GameplayStatics.h"
 
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
 AAnCharacter::AAnCharacter()
 {
+	PrimaryActorTick.bCanEverTick         = true;
+	PrimaryActorTick.bStartWithTickEnabled = true;
+
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
 
 	bUseControllerRotationPitch = false;
@@ -52,6 +58,76 @@ AAnCharacter::AAnCharacter()
 	WeaponMesh->SetupAttachment(GetMesh());
 
 	InventoryComponent = CreateDefaultSubobject<UInventoryComponent>(TEXT("InventoryComponent"));
+	QuestComponent     = CreateDefaultSubobject<UQuestComponent>(TEXT("QuestComponent"));
+}
+
+void AAnCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	if (bIsInDialogue || bIsPaused)
+	{
+		HideInteractHint();
+		return;
+	}
+
+	AActor* NearestActor = FindInteractableActor();
+	if (NearestActor)
+		ShowInteractHint(NearestActor);
+	else
+		HideInteractHint();
+}
+
+void AAnCharacter::ShowInteractHint(AActor* TargetActor)
+{
+	if (TargetActor == LastHintActor && InteractHintWidget) return;
+
+	LastHintActor = TargetActor;
+	if (!InteractHintWidgetClass) return;
+
+	APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+	if (!PC) return;
+
+	if (!InteractHintWidget)
+	{
+		InteractHintWidget = CreateWidget<UUserWidget>(PC, InteractHintWidgetClass);
+		if (!InteractHintWidget) return;
+		InteractHintWidget->AddToViewport(10);
+	}
+
+	FString ActionText;
+	if (TargetActor->Implements<UInteractableInterface>())
+	{
+		const EInteractableType Type =
+			IInteractableInterface::Execute_GetInteractableType(TargetActor);
+
+		switch (Type)
+		{
+		case EInteractableType::Firefly: ActionText = TEXT("거두기"); break;
+		case EInteractableType::NPC:     ActionText = TEXT("대화");   break;
+		case EInteractableType::Item:    ActionText = TEXT("줍기");   break;
+		case EInteractableType::Portal:  ActionText = TEXT("이동");   break;
+		default:                         ActionText = TEXT("상호작용"); break;
+		}
+	}
+	
+	if (UInteractHintWidget* HintWidget = Cast<UInteractHintWidget>(InteractHintWidget))
+	{
+		HintWidget->SetHintText(ActionText);
+	}
+
+	InteractHintWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
+}
+
+void AAnCharacter::HideInteractHint()
+{
+	if (!InteractHintWidget) return;
+	
+	if (LastHintActor != nullptr)
+	{
+		LastHintActor = nullptr;
+		InteractHintWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
 }
 
 void AAnCharacter::AttachWeaponToSocket(FName SocketName)
@@ -92,6 +168,20 @@ void AAnCharacter::BeginPlay()
 	SetABPIsState2(bIsState2);
 	bIsLanternEquipped = false;
 	AttachWeaponToSocket(LanternDefaultSocket);
+
+	if (InventoryComponent)
+	{
+		InventoryComponent->OnInventoryUpdated.AddDynamic(
+			this, &AAnCharacter::OnInventoryUpdated);
+	}
+}
+
+void AAnCharacter::OnInventoryUpdated(const FItemData& AddedItem)
+{
+	if (!QuestComponent) return;
+	UE_LOG(LogTemp, Verbose, TEXT("[Quest] 인벤토리 변경 감지: %s — 퀘스트 조건 재평가"),
+		*AddedItem.ItemID.ToString());
+	QuestComponent->EvaluateAllActiveQuests();
 }
 
 void AAnCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -119,24 +209,23 @@ void AAnCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompone
 		if (DialogueSkipAction)
 			EIC->BindAction(DialogueSkipAction, ETriggerEvent::Started, this, &AAnCharacter::EndDialogueInput);
 
-		// ★ 추가: ESC 입력 바인딩
 		if (PauseAction)
 			EIC->BindAction(PauseAction, ETriggerEvent::Started, this, &AAnCharacter::OnPauseInput);
+
+		if (SprintAction)
+		{
+			EIC->BindAction(SprintAction, ETriggerEvent::Started,   this, &AAnCharacter::StartSprint);
+			EIC->BindAction(SprintAction, ETriggerEvent::Completed, this, &AAnCharacter::StopSprint);
+		}
 	}
 }
 
-// ★ 추가 ─────────────────────────────────────────────
-// ESC 키 입력 → TogglePause 호출
 void AAnCharacter::OnPauseInput(const FInputActionValue& Value)
 {
-	// 대화 중에는 일시정지 메뉴를 열지 않음
 	if (bIsInDialogue) return;
-
 	TogglePause();
 }
 
-// ★ 추가 ─────────────────────────────────────────────
-// 일시정지 토글: 위젯 생성/제거 + 게임 일시정지/재개
 void AAnCharacter::TogglePause()
 {
 	APlayerController* PC = Cast<APlayerController>(GetController());
@@ -146,50 +235,41 @@ void AAnCharacter::TogglePause()
 
 	if (bIsPaused)
 	{
-		// 게임 일시정지
 		UGameplayStatics::SetGamePaused(GetWorld(), true);
-
-		// 마우스 표시 + UI 입력 모드
 		PC->bShowMouseCursor = true;
 		PC->SetInputMode(FInputModeGameAndUI());
 
-		// 일시정지 위젯 생성 및 표시
 		if (PauseWidgetClass && !PauseWidget)
 		{
 			PauseWidget = CreateWidget<UUserWidget>(PC, PauseWidgetClass);
 			if (PauseWidget)
 			{
-				// OwnerCharacter 주입
 				if (FObjectProperty* Prop = FindFProperty<FObjectProperty>(
 					PauseWidget->GetClass(), TEXT("OwnerCharacter")))
 				{
 					Prop->SetObjectPropertyValue_InContainer(PauseWidget, this);
 				}
-				PauseWidget->AddToViewport(20); // HUD 위에 표시
+				PauseWidget->AddToViewport(20);
 			}
-		}
-		else if (PauseWidget)
-		{
-			PauseWidget->SetVisibility(ESlateVisibility::Visible);
 		}
 	}
 	else
 	{
-		// 게임 재개
-		UGameplayStatics::SetGamePaused(GetWorld(), false);
+		if (PauseWidget)
+		{
+			PauseWidget->RemoveFromParent();
+			PauseWidget = nullptr;
+		}
 
 		PC->bShowMouseCursor = false;
 		PC->SetInputMode(FInputModeGameOnly());
-
-		// 일시정지 위젯 숨기기 (재사용을 위해 Destroy 대신 Hidden)
-		if (PauseWidget)
-			PauseWidget->SetVisibility(ESlateVisibility::Collapsed);
+		UGameplayStatics::SetGamePaused(GetWorld(), false);
 	}
 }
-// ─────────────────────────────────────────────────────
 
 void AAnCharacter::EnterDialogue(ANpcActor* Npc)
 {
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 	bIsInDialogue = true;
 	ActiveNpc     = Npc;
 	GetCharacterMovement()->DisableMovement();
@@ -220,7 +300,7 @@ void AAnCharacter::AddLanternEnergy(float Amount)
 
 	if (LanternMID)
 	{
-		const float EmissiveValue = FMath::Clamp(LanternEnergy, 0.f, MaxEmissiveValue);
+		const float EmissiveValue = FMath::Clamp(LanternEnergy * 0.1f, 0.f, MaxEmissiveValue);
 		LanternMID->SetScalarParameterValue(EmissiveParamName, EmissiveValue);
 	}
 
@@ -377,6 +457,8 @@ void AAnCharacter::OnUnequipMontageEnded(UAnimMontage* Montage, bool bInterrupte
 void AAnCharacter::PlayCollectMontage()
 {
 	UAnimInstance* AnimInst = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+
 	if (!AnimInst || !CollectMontage)
 	{
 		bIsCollecting = false;
@@ -424,6 +506,17 @@ void AAnCharacter::EndDialogueInput(const FInputActionValue& Value)
 {
 	if (bIsInDialogue && ActiveNpc)
 		ActiveNpc->EndDialogue(this);
+}
+
+void AAnCharacter::StartSprint(const FInputActionValue& Value)
+{
+	if (bIsInDialogue || bIsCollecting) return;
+	GetCharacterMovement()->MaxWalkSpeed = SprintSpeed;
+}
+
+void AAnCharacter::StopSprint(const FInputActionValue& Value)
+{
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 }
 
 void AAnCharacter::Move(const FInputActionValue& Value)

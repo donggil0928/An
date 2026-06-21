@@ -14,6 +14,7 @@ class ANpcActor : public AActor, public IInteractableInterface
 
 public:
 	ANpcActor();
+
 	UPROPERTY()
 	ANpcActor* OwnerNpc;
 
@@ -25,16 +26,16 @@ public:
 		if (OwnerNpc)
 			OwnerNpc->SelectChoice(ChoiceIndex);
 	}
-	
+
 	virtual void Interact_Implementation(AActor* Interactor) override;
 	virtual EInteractableType GetInteractableType_Implementation() const override;
-	
+
 	UFUNCTION(BlueprintCallable, Category = "NPC")
 	void AdvanceDialogue(AActor* Interactor);
 
 	UFUNCTION(BlueprintCallable, Category = "NPC|Dialogue")
 	void SelectChoice(int32 InChoiceIndex);
-	
+
 	UFUNCTION(BlueprintCallable, Category = "NPC")
 	void EndDialogue(AActor* Interactor);
 
@@ -44,37 +45,40 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "NPC")
 	FText NpcName;
-	
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Dialogue")
 	TArray<FDialogueLine> DialogueLines;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "NPC|Dialogue|Quest")
+	TArray<FQuestDialogueEntry> QuestDialogueEntries;
 
 	UPROPERTY(EditAnywhere, Category = "NPC|UI")
 	TSubclassOf<class UUserWidget> DialogueWidgetClass;
 
 	UPROPERTY(EditAnywhere, Category = "NPC|UI")
 	TSubclassOf<class UUserWidget> ChoiceButtonWidgetClass;
-	
+
 	UPROPERTY(EditAnywhere, Category = "NPC|Camera")
 	FVector DialogueCameraOffset = FVector(-180.f, 120.f, 80.f);
 
 	UPROPERTY(EditAnywhere, Category = "NPC|Camera")
 	float CameraBlendTime = 0.6f;
-	
+
 	UPROPERTY(BlueprintReadOnly, Category = "NPC|Dialogue")
 	int32 CurrentLineIndex = 0;
-	
+
 	UPROPERTY(BlueprintReadOnly, Category = "NPC|Dialogue")
 	bool bIsInDialogue = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "NPC|Dialogue")
 	bool bWaitingForChoice = false;
-	
+
 	UFUNCTION(BlueprintImplementableEvent, Category = "NPC")
 	void OnDialogueLine(const FText& SpeakerName, const FText& Line, int32 LineIndex);
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "NPC|Dialogue")
 	void OnShowChoices(const TArray<FDialogueChoice>& Choices);
-	
+
 	UFUNCTION(BlueprintImplementableEvent, Category = "NPC")
 	void OnTalk(AActor* Interactor);
 
@@ -96,14 +100,24 @@ private:
 	class UPanelWidget* ChoiceBox;
 
 	bool bEndsAfterLine = false;
+
+	TArray<FDialogueChoice> ActiveChoices;
 	
+	int32 ResolveStartIndex() const;
+
+	TArray<FDialogueChoice> FilterChoices(const TArray<FDialogueChoice>& InChoices) const;
+
+	void HandleQuestAccept(const FDialogueChoice& Choice);
+
+	void HandleQuestFinish(const FDialogueChoice& Choice);
+
 	void ShowLine(int32 Index);
 	void UpdateDialogueUI(const FText& Speaker, const FText& Line);
 	void ShowChoicesUI(const TArray<FDialogueChoice>& Choices);
 	void HideChoicesUI();
 	void CreateDialogueWidget(AActor* Interactor);
 	void RemoveDialogueWidget();
-	
+
 	void StartDialogueCamera(AActor* Interactor);
 	void RestorePlayerCamera(AActor* Interactor);
 };

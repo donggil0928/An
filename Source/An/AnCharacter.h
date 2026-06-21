@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Logging/LogMacros.h"
+#include "Blueprint/UserWidget.h"
 #include "AnCharacter.generated.h"
 
 class USpringArmComponent;
@@ -10,6 +11,7 @@ class UCameraComponent;
 class UInputMappingContext;
 class UInputAction;
 class UInventoryComponent;
+class UQuestComponent;
 class ANpcActor;
 struct FInputActionValue;
 
@@ -33,6 +35,15 @@ class AAnCharacter : public ACharacter
 	UInputAction* JumpAction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
+	UInputAction* SprintAction;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement", meta = (AllowPrivateAccess = "true"))
+	float WalkSpeed = 400.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement", meta = (AllowPrivateAccess = "true"))
+	float SprintSpeed = 800.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* MoveAction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
@@ -49,9 +60,12 @@ class AAnCharacter : public ACharacter
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	UInputAction* PauseAction;
-	
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory", meta = (AllowPrivateAccess = "true"))
 	UInventoryComponent* InventoryComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Quest", meta = (AllowPrivateAccess = "true"))
+	UQuestComponent* QuestComponent;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Interaction", meta = (AllowPrivateAccess = "true"))
 	float InteractDistance = 200.f;
@@ -70,10 +84,10 @@ class AAnCharacter : public ACharacter
 
 	UPROPERTY(EditAnywhere, Category = "Lantern", meta = (AllowPrivateAccess = "true"))
 	FName EmissiveParamName = TEXT("EmissiveIntensity");
-	
+
 	UPROPERTY(EditAnywhere, Category = "Lantern|Socket", meta = (AllowPrivateAccess = "true"))
 	FName LanternEquipSocket = TEXT("hand_r_socket");
-	
+
 	UPROPERTY(EditAnywhere, Category = "Lantern|Socket", meta = (AllowPrivateAccess = "true"))
 	FName LanternDefaultSocket = TEXT("back_socket");
 
@@ -90,26 +104,21 @@ class AAnCharacter : public ACharacter
 
 	UPROPERTY(EditAnywhere, Category = "Lantern|State", meta = (AllowPrivateAccess = "true"))
 	float InactiveTimeout = 5.f;
-	
+
 	UPROPERTY(EditAnywhere, Category = "Lantern|Montage", meta = (AllowPrivateAccess = "true"))
 	class UAnimMontage* EquipMontage;
 
 	UPROPERTY(EditAnywhere, Category = "Lantern|Montage", meta = (AllowPrivateAccess = "true"))
 	class UAnimMontage* UnequipMontage;
 
-	// 반딧불이 수집 애니메이션
 	UPROPERTY(EditAnywhere, Category = "Lantern|Montage", meta = (AllowPrivateAccess = "true"))
 	class UAnimMontage* CollectMontage;
-	
-	bool bIsPlayingMontage = false;
 
-	// 수집 애니메이션 재생 중 여부 (이동 차단용)
-	bool bIsCollecting = false;
-	
+	bool bIsPlayingMontage  = false;
+	bool bIsCollecting      = false;
 	bool bIsLanternEquipped = false;
+	bool bIsPaused          = false;
 
-	bool bIsPaused = false;
-	
 	FTimerHandle LanternUnequipTimerHandle;
 	FTimerHandle IdleTimerHandle;
 
@@ -118,9 +127,7 @@ class AAnCharacter : public ACharacter
 	void OnIdleTimeout();
 
 	void SetABPIsState2(bool bValue);
-	
 	void PlayUnequipMontage();
-	
 	void AttachWeaponToSocket(FName SocketName);
 
 	UFUNCTION()
@@ -131,7 +138,7 @@ class AAnCharacter : public ACharacter
 
 	UFUNCTION()
 	void OnCollectMontageEnded(UAnimMontage* Montage, bool bInterrupted);
-	
+
 	UFUNCTION(BlueprintCallable, Category = "Lantern|Montage")
 	void AnimNotify_EquipReady();
 
@@ -139,25 +146,43 @@ class AAnCharacter : public ACharacter
 	void AnimNotify_UnequipReady();
 
 	void OnPauseInput(const FInputActionValue& Value);
-	
+
 	UPROPERTY(EditAnywhere, Category = "Pause|UI", meta = (AllowPrivateAccess = "true"))
 	TSubclassOf<class UUserWidget> PauseWidgetClass;
 
 	UPROPERTY()
 	class UUserWidget* PauseWidget;
+
+	UFUNCTION()
+	void OnInventoryUpdated(const FItemData& AddedItem);
 	
+	UPROPERTY(EditAnywhere, Category = "Interaction|HintUI", meta = (AllowPrivateAccess = "true"))
+	TSubclassOf<UUserWidget> InteractHintWidgetClass;
+
+	UPROPERTY()
+	UUserWidget* InteractHintWidget;
+
+	UPROPERTY()
+	AActor* LastHintActor;
+
+	void ShowInteractHint(AActor* TargetActor);
+
+	void HideInteractHint();
+
 public:
 	AAnCharacter();
 
+	virtual void Tick(float DeltaSeconds) override;
+
 	DECLARE_MULTICAST_DELEGATE(FOnLanternEquipped);
 	FOnLanternEquipped OnLanternEquippedComplete;
-	
+
 	void EnterDialogue(ANpcActor* Npc);
 	void ExitDialogue();
 
 	UFUNCTION(BlueprintCallable, Category = "Pause")
 	void TogglePause();
-	
+
 	UFUNCTION(BlueprintCallable, Category = "Lantern")
 	FVector GetLanternLocation(FName SocketName = TEXT("lantern_socket")) const;
 
@@ -168,12 +193,11 @@ public:
 	bool IsLanternEquipped() const { return bIsLanternEquipped; }
 
 	void PlayEquipMontage();
-
 	void PlayCollectMontage();
 
 	UFUNCTION(BlueprintCallable, Category = "Lantern")
 	bool IsCollecting() const { return bIsCollecting; }
-	
+
 	UFUNCTION(BlueprintCallable, Category = "Lantern")
 	float GetLanternEnergy() const { return LanternEnergy; }
 
@@ -183,6 +207,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Lantern|State")
 	bool GetIsState2() const { return bIsState2; }
 
+	FORCEINLINE UInventoryComponent* GetInventory()      const { return InventoryComponent; }
+	FORCEINLINE UQuestComponent*     GetQuestComponent() const { return QuestComponent; }
+
 protected:
 	void Move(const FInputActionValue& Value);
 	void Look(const FInputActionValue& Value);
@@ -190,13 +217,14 @@ protected:
 	void OnJumpOrAdvance(const FInputActionValue& Value);
 	void AdvanceDialogue(const FInputActionValue& Value);
 	void EndDialogueInput(const FInputActionValue& Value);
+	void StartSprint(const FInputActionValue& Value);
+	void StopSprint(const FInputActionValue& Value);
 	AActor* FindInteractableActor() const;
 
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 	virtual void BeginPlay() override;
 
 public:
-	FORCEINLINE class USpringArmComponent* GetCameraBoom()  const { return CameraBoom; }
-	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
-	FORCEINLINE UInventoryComponent* GetInventory()    const { return InventoryComponent; }
+	FORCEINLINE class USpringArmComponent* GetCameraBoom()   const { return CameraBoom; }
+	FORCEINLINE class UCameraComponent*    GetFollowCamera()  const { return FollowCamera; }
 };

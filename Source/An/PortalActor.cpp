@@ -25,32 +25,42 @@ APortalActor::APortalActor()
 
 void APortalActor::Interact_Implementation(AActor* Interactor)
 {
-	if (bIsActivated) return;
+	UE_LOG(LogTemp, Warning, TEXT("[포탈] Interact 호출됨"));
+    
+    	if (bIsActivated)
+    	{
+    		UE_LOG(LogTemp, Warning, TEXT("[포탈] 이미 활성화됨 — 중복 호출 무시"));
+    		return;
+    	}
+    
+    	AAnCharacter* Player = Cast<AAnCharacter>(Interactor);
+    	if (!Player)
+    	{
+    		UE_LOG(LogTemp, Error, TEXT("[포탈] Interactor가 AAnCharacter 아님 — 캐스트 실패"));
+    		return;
+    	}
+    
+    	const float CurrentEnergy = Player->GetLanternEnergy();
+    	UE_LOG(LogTemp, Warning, TEXT("[포탈] 현재 에너지 %.1f / 필요 %.1f"), CurrentEnergy, RequiredEnergy);
+    
+    	// ★ 테스트 플래그가 꺼져 있을 때만 에너지 조건 적용
+    	if (!bIgnoreEnergyForTest && CurrentEnergy < RequiredEnergy)
+    	{
+    		UE_LOG(LogTemp, Log, TEXT("[포탈] 에너지 부족 — 활성화 취소"));
+    		OnPortalLocked(CurrentEnergy, RequiredEnergy);
+    		return;
+    	}
+    
+    	bIsActivated      = true;
+    	CurrentInteractor = Interactor;
+    
+    	UE_LOG(LogTemp, Warning, TEXT("[포탈] 활성화 성공 — 연출 시작"));
+    
+    	OnPortalOpen();
+    	PlayOpenMontage();
+    	PlayOpenCinematic();
+    	StartEndWidgetTimer();
 
-	AAnCharacter* Player = Cast<AAnCharacter>(Interactor);
-	if (!Player) return;
-
-	const float CurrentEnergy = Player->GetLanternEnergy();
-
-	if (CurrentEnergy < RequiredEnergy)
-	{
-		UE_LOG(LogTemp, Log, TEXT("[포탈] 에너지 부족 (%.1f / %.1f)"), CurrentEnergy, RequiredEnergy);
-		OnPortalLocked(CurrentEnergy, RequiredEnergy);
-		return;
-	}
-
-	bIsActivated      = true;
-	CurrentInteractor = Interactor;
-
-	UE_LOG(LogTemp, Log, TEXT("[포탈] 활성화 — 포탈이 열립니다."));
-	
-	OnPortalOpen();
-
-	PlayOpenMontage();
-	
-	PlayOpenCinematic();
-	
-	StartEndWidgetTimer();
 }
 
 void APortalActor::PlayOpenCinematic()
@@ -106,39 +116,60 @@ void APortalActor::PlayOpenMontage()
 void APortalActor::StartEndWidgetTimer()
 {
 	float TotalDelay = EndWidgetDelay;
-
-	if (OpenSequence && SequencePlayer)
-	{
-		TotalDelay += SequencePlayer->GetDuration().AsSeconds();
-	}
-
-	UE_LOG(LogTemp, Log, TEXT("[포탈] %.1f초 후 END 위젯 표시"), TotalDelay);
-
-	GetWorldTimerManager().SetTimer(
-		EndWidgetTimerHandle,
-		this,
-		&APortalActor::ShowEndWidget,
-		TotalDelay,
-		false
-	);
+    
+    	if (OpenSequence && SequencePlayer)
+    	{
+    		const float SeqLen = SequencePlayer->GetDuration().AsSeconds();
+    		TotalDelay += SeqLen;
+    		UE_LOG(LogTemp, Warning, TEXT("[포탈] 시퀀스 있음 — 길이 %.1f + 지연 %.1f = %.1f초 후 표시"),
+    			SeqLen, EndWidgetDelay, TotalDelay);
+    	}
+    	else
+    	{
+    		UE_LOG(LogTemp, Warning, TEXT("[포탈] 시퀀스 없음 — %.1f초 후 표시 (OpenSequence=%s, SequencePlayer=%s)"),
+    			TotalDelay,
+    			OpenSequence  ? TEXT("OK") : TEXT("NULL"),
+    			SequencePlayer ? TEXT("OK") : TEXT("NULL"));
+    	}
+    
+    	GetWorldTimerManager().SetTimer(
+    		EndWidgetTimerHandle,
+    		this,
+    		&APortalActor::ShowEndWidget,
+    		TotalDelay,
+    		false
+    	);
+    
+    	UE_LOG(LogTemp, Warning, TEXT("[포탈] END 위젯 타이머 설정 완료 (%.1f초)"), TotalDelay);
 }
 
 void APortalActor::ShowEndWidget()
 {
+	UE_LOG(LogTemp, Warning, TEXT("[포탈] ShowEndWidget 호출됨 — 타이머 만료"));
+
 	APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
-	if (!PC) return;
+	if (!PC)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[포탈] PlayerController 없음"));
+		return;
+	}
 
 	if (!EndWidgetClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[포탈] EndWidgetClass 미설정"));
+		UE_LOG(LogTemp, Error, TEXT("[포탈] EndWidgetClass 미설정 — 위젯 생성 불가"));
 		return;
 	}
 
 	if (UUserWidget* EndWidget = CreateWidget<UUserWidget>(PC, EndWidgetClass))
 	{
 		EndWidget->AddToViewport(100);
+		UE_LOG(LogTemp, Warning, TEXT("[포탈] END 위젯 생성 및 뷰포트 추가 완료"));
 	}
-	
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("[포탈] CreateWidget 실패"));
+	}
+
 	PC->bShowMouseCursor = true;
 	PC->SetInputMode(FInputModeUIOnly());
 }

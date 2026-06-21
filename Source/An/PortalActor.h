@@ -19,9 +19,13 @@ public:
 protected:
 	UPROPERTY(VisibleAnywhere, Category = "Portal")
 	class USkeletalMeshComponent* MeshComp;
-
+	
 	UPROPERTY(EditAnywhere, Category = "Portal")
 	float RequiredEnergy = 100.f;
+
+	/** ★ 테스트용: 켜면 에너지 조건 무시하고 즉시 활성화 */
+	UPROPERTY(EditAnywhere, Category = "Portal|Debug")
+	bool bIgnoreEnergyForTest = true;
 	
 	UPROPERTY(EditAnywhere, Category = "Portal|Cinematic")
 	class ULevelSequence* OpenSequence;
